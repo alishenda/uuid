@@ -117,16 +117,6 @@ interface StorageDataSerializer {
 
 class UUIDv8Generator {
     companion object {
-        fun generate(storage: Storage, value: Any): String {
-            val data = storage.serializer.serialize(value)
-            require(data.size == 8) { "Serialized data must be exactly 8 bytes" }
-
-            val timestamp = Instant.now().toEpochMilli() and 0xFFFFFFFFFFFF
-            val msb = (timestamp shl 16) or (8L shl 12) or storage.code.toLong()
-            val lsb = (0b10L shl 62) or data.fold(0L) { acc, byte -> (acc shl 8) or (byte.toLong() and 0xFF) }
-
-            return formatUUID(msb, lsb)
-        }
 
         fun formatUUID(msb: Long, lsb: Long): String {
             return "%08x-%04x-%04x-%04x-%012x".format(
@@ -140,17 +130,49 @@ class UUIDv8Generator {
     }
 }
 
-fun main() {
-    // Exemples de sérialisation
-    val loremStorage = Storage.fromCode(0x01)
-    val ipsumStorage = Storage.fromCode(0x02)
-    val otherStorage = Storage.fromCode(0xFF)
+class UuidV8Dsl {
+    var timestamp: Long = Instant.now().toEpochMilli() // Valeur par défaut
+    var storageCode: Int = 0xFF // Storage "Other" par défaut
+    var data: Any = ByteArray(8) { 0 } // Données par défaut
 
-    // Overriding serializer for "Other"
+    fun build(): String {
+        val storage = Storage.fromCode(storageCode)
+        val serializedData = storage.serializer.serialize(data)
+        require(serializedData.size == 8) { "Data must serialize to exactly 8 bytes" }
+
+        val msb = (timestamp and 0xFFFFFFFFFFFF shl 16) or (8L shl 12) or storage.code.toLong()
+        val lsb = (0b10L shl 62) or serializedData.fold(0L) { acc, byte -> (acc shl 8) or (byte.toLong() and 0xFF) }
+
+        return UUIDv8Generator.formatUUID(msb, lsb)
+    }
+}
+
+fun uuidV8(configure: UuidV8Dsl.() -> Unit): String {
+    val dsl = UuidV8Dsl().apply(configure)
+    return dsl.build()
+}
+
+fun main() {
+    // Exemple 1 : Générer un UUID avec un storage réservé
+    val uuidLorem = uuidV8 {
+        storageCode = 0x01 // "Lorem"
+        data = "Hello" // Chaîne sérialisée automatiquement
+    }
+    println("UUID Lorem: $uuidLorem")
+
+    // Exemple 2 : Générer un UUID avec un storage réservé et des données personnalisées
+    val uuidIpsum = uuidV8 {
+        storageCode = 0x02 // "Ipsum"
+        data = 42 // Entier sérialisé automatiquement
+    }
+    println("UUID Ipsum: $uuidIpsum")
+
+    // Exemple 3 : Générer un UUID avec un storage non réservé
     DefaultStorageDataSerializer.overrideSerializer(object : StorageDataSerializer {
         override fun serialize(value: Any): ByteArray {
             require(value is Long) { "Expected a Long for Other storage" }
-            return ByteArray(8) { i -> ((value shr (56 - i * 8)) and 0xFF).toByte() }
+            val rawBytes = ByteArray(8) { i -> ((value shr (56 - i * 8)) and 0xFF).toByte() }
+            return rawBytes.padTo8Bytes()
         }
 
         override fun deserialize(bytes: ByteArray): Any {
@@ -159,16 +181,9 @@ fun main() {
         }
     })
 
-    // Generate UUIDs
-    val uuidLorem = UUIDv8Generator.generate(loremStorage, "tHello")
-    val uuidIpsum = UUIDv8Generator.generate(ipsumStorage, 42)
-    val uuidOther = UUIDv8Generator.generate(otherStorage, 123456789L)
-
-    println("UUID Lorem: $uuidLorem")
-    println("UUID Ipsum: $uuidIpsum")
+    val uuidOther = uuidV8 {
+        storageCode = 0xFF // "Other"
+        data = 123456789L // Long sérialisé automatiquement
+    }
     println("UUID Other: $uuidOther")
-
-    // Deserialize
-    val deserializedOther = Uuid.fromString(uuidOther)
-    println("Deserialized Other data: ${deserializedOther.storage.serializer.deserialize(deserializedOther.data)}")
 }
