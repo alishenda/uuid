@@ -1,10 +1,18 @@
 import java.time.Instant
 
 class UUIDBuilder<T : Any>(
-    private val storage: Storage<T>
+    private var storage: Storage<T>
 ) {
     private var timestamp: Instant = Instant.now()
     private var data: T? = null
+
+    /**
+     * Définit votre propre stockage personnalisé.
+     */
+    fun withCustomStorage(customStorage: Storage<T>): UUIDBuilder<T> {
+        this.storage = customStorage
+        return this
+    }
 
     /**
      * Définit le timestamp pour le UUID.
