@@ -26,5 +26,11 @@ class UUID8Test {
         println("UUID (Ipsum): ${uuidIpsum.toFormattedString()}")
     }
 
+    @Test
+    fun decodeUUID8() {
+        val uuid: UUID<IpsumData> = UUID.fromString("0193c70a-0d00-8920-a734-3254657374")
+        println("UUID: $uuid")
+    }
+
 
 }
