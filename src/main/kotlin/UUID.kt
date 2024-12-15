@@ -1,11 +1,10 @@
 import java.time.Instant
-import kotlin.code
 import kotlin.experimental.or
 import kotlin.random.Random
 import kotlin.random.nextUBytes
 
 class UUID<T>(
-    private val timestamp: Instant,
+    val timestamp: Instant,
     val storage: Storage<T>,
     val data: T
 ) {
@@ -79,8 +78,7 @@ class UUID<T>(
     companion object {
 
         val reservedStorages = listOf(
-            Lorem("Lorem Storage", 0x10u),
-            Ipsum("Ipsum Storage", 0x20u),
+            Lorem("Lorem Storage", 0x10u)
         )
 
         /**
