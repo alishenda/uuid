@@ -3,10 +3,9 @@ import kotlin.experimental.or
 import kotlin.random.Random
 import kotlin.random.nextUBytes
 
-class UUID<T>(
+class UUID(
     val timestamp: Instant,
-    val storage: Storage<T>,
-    val data: T
+    val storage: IStorage
 ) {
 
     private fun timestampToByteArray(): ByteArray {
@@ -47,7 +46,11 @@ class UUID<T>(
     }
 
     private fun dataToByteArray(): ByteArray {
-        val encodedData: ByteArray = storage.encoder(data)
+        val encodedData: ByteArray = when (storage) {
+            is Storage -> storage.data
+            is Lorem -> storage.encoder(storage.data)
+            else -> throw IllegalArgumentException("Unsupported storage type: ${storage.javaClass.canonicalName}")
+        }
 
         if (encodedData.size != 6) {
             error("Data must be encoded to 6 bytes (actual is ${encodedData.size}). Padding with zeroes is recommended")
@@ -70,16 +73,13 @@ class UUID<T>(
         - Timestamp       : $timestamp (${timestamp.toEpochMilli()} ms since epoch)
         - Storage Name    : ${storage.name}
         - Storage Code    : ${"0x${storage.code.toString(16)}"}
-        - Data            : $data
+        - Data            : ${storage}
         - Formatted UUID  : ${toFormattedString()}
     """.trimIndent()
     }
 
     companion object {
 
-        val reservedStorages = listOf(
-            Lorem("Lorem Storage", 0x10u)
-        )
 
         /**
          * Recréé une instance de UUID à partir de sa représentation chaîne.
@@ -87,7 +87,7 @@ class UUID<T>(
          * @param customStorage Storage personnalisé à utiliser pour désérialiser le UUID. Si non fourni, la méthode essaiera de trouver le Storage dans `reservedStorages`.
          * @throws IllegalArgumentException Si aucun storage (ni réservé, ni custom) ne correspond.
          */
-        fun <T : Any> fromString(uuidString: String, customStorage: Storage<T>? = null): UUID<T> {
+        fun <T : Any> fromString(uuidString: String): UUID {
             // Suppression des tirets pour manipulation simplifiée
             val cleanString = uuidString.replace("-", "")
 
@@ -104,29 +104,13 @@ class UUID<T>(
             // Reconstruire "storage code" depuis la partie versionAndStorage
             val storageCode = versionAndStorage[1].toUByte()
 
+            val storage: IStorage? = StorageType.findByCode(storageCode.toInt(), dataBytes)
             // Si un customStorage est fourni, vérifier s'il correspond au storageCode
-            if (customStorage != null) {
-                if (customStorage.code == storageCode) {
-                    val decodedData = customStorage.decoder(dataBytes)
-                    return UUID(timestamp = timestamp, storage = customStorage, data = decodedData)
-                } else {
-                    throw IllegalArgumentException("Le customStorage fourni ne correspond pas au Storage code extrait du UUID.")
-                }
-            }
-
-            // Identifier le Storage correspondant dans les reservedStorages
-            val matchingStorage = reservedStorages.find { it.code == storageCode }
-                ?: throw IllegalArgumentException("Aucun Storage correspondant trouvé pour le code $storageCode")
-
-            // Désérialiser les données en utilisant le decoder du Storage
-            @Suppress("UNCHECKED_CAST") // Nous savons que le type est correct ici
-            val decodedData = (matchingStorage as Storage<T>).decoder(dataBytes)
 
             // Recréer l'instance UUID
             return UUID(
                 timestamp = timestamp,
-                storage = matchingStorage,
-                data = decodedData
+                storage = storage!!
             )
         }
     }

@@ -1,15 +1,24 @@
-class Lorem(override val name: String, override val code: UByte) : Storage<String> {
-    override fun encoder(value: String): ByteArray {
+class Lorem(override val data: String) : StorageWithData<String> {
 
-        val rawData = value.toByteArray().take(6).toByteArray()
+    override val name: String = "Lorem"
+    override val code: Int = 1
 
-        val paddedData = ByteArray(6)
-        rawData.copyInto(paddedData)
-
-        return paddedData
+    init {
+        require(data.length <= 6)
     }
 
-    override fun decoder(value: ByteArray): String {
-        return value.toString(Charsets.UTF_8)
+    override fun encoder(data: String): ByteArray {
+        val result = ByteArray(6)
+        data.toByteArray().copyInto(result)
+        return result
     }
+
+    override fun decoder(data: ByteArray): String {
+       return data.decodeToString()
+    }
+
+    override fun toString(): String {
+        return data
+    }
+
 }
